@@ -1,4 +1,11 @@
 {
+   "redirects": [
+    {
+        "source": "/",
+        "destination": "/dashboard/clients/login.html",
+        "permanent": true
+    }
+   ],
   "rewrites":[
     { "source": "/(.*)",
   "destination": "/" }
