@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | MHG Market</title>
+    <script>
+        if (!sessionStorage.getItem('adminActive')) { window.location.replace("login.html"); }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Hind+Siliguri:wght@400;600;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', 'Hind Siliguri', sans-serif; background-color: #f8fafc; overflow: hidden; }
+        .sidebar { transition: transform 0.3s ease-in-out; background: #0f172a; z-index: 200; position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; }
+        @media (min-width: 1024px) { .sidebar { transform: translateX(0) !important; position: static; } }
+        @media (max-width: 1024px) { .sidebar { transform: translateX(-100%); } .sidebar.active { transform: translateX(0); } }
+        header { position: sticky; top: 0; background: white; z-index: 150; transition: transform 0.3s ease-in-out; border-bottom: 1px solid #f1f5f9; }
+        .header-hidden { transform: translateY(-100%); }
+        #sidebarOverlay.active { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 180; }
+        #timeoutPopup { z-index: 9999; display: none; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); }
+        #profileModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body style="display: none;" class="flex h-screen overflow-hidden">
+
+    <div id="sidebarOverlay"></div>
+
+    <!-- Edit Profile Modal -->
+    <div id="profileModal">
+        <div class="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto p-8 rounded-[2.5rem] shadow-2xl m-4 custom-scroll">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-2xl font-black text-slate-800">Edit Tenant Profile</h2>
+                <button onclick="closeProfileModal()" class="text-slate-400 hover:text-rose-500"><i class="fas fa-times-circle text-2xl"></i></button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="profileEditForm">
+                <div class="space-y-4">
+                    <p class="font-bold text-indigo-600 text-[10px] uppercase tracking-widest border-l-4 border-indigo-600 pl-2">Personal</p>
+                    <input type="text" id="edit_name_bn" placeholder="নাম (বাংলায়)" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="text" id="edit_name_en" placeholder="Name (English)" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="text" id="edit_father" placeholder="পিতার নাম" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="text" id="edit_mother" placeholder="মাতার নাম" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="date" id="edit_dob" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="text" id="edit_nid" placeholder="NID Number" class="w-full p-3 border rounded-xl text-sm">
+                    <textarea id="edit_address" placeholder="ঠিকানা" class="w-full p-3 border rounded-xl text-sm h-16"></textarea>
+                </div>
+                <div class="space-y-4">
+                    <p class="font-bold text-indigo-600 text-[10px] uppercase tracking-widest border-l-4 border-indigo-600 pl-2">Business & Security</p>
+                    <input type="text" id="edit_tenant_code" placeholder="Tenant Code" class="w-full p-3 border rounded-xl text-sm font-bold bg-indigo-50">
+                    <input type="text" id="edit_img" placeholder="Image URL" class="w-full p-3 border rounded-xl text-sm text-blue-500">
+                    <input type="text" id="edit_biz_name" placeholder="প্রতিষ্ঠানের নাম" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="text" id="edit_biz_type" placeholder="ব্যবসার ধরণ" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="text" id="edit_unit_codes" placeholder="Unit Codes" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="email" id="edit_email" placeholder="Tenant Email" class="w-full p-3 border rounded-xl text-sm">
+                    <input type="text" id="edit_mobile" placeholder="Mobile" class="w-full p-3 border rounded-xl text-sm">
+                    <button onclick="updateProfileData()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg mt-4">Update Profile</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeout Popup -->
+    <div id="timeoutPopup">
+        <div class="bg-white p-8 rounded-[2.5rem] shadow-2xl text-center max-w-sm w-full mx-4 border">
+            <div class="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4"><i class="fas fa-clock"></i></div>
+            <h3 class="text-xl font-bold text-slate-800 mb-2 font-['Hind_Siliguri']">নিষ্ক্রিয়তা সতর্কতা!</h3>
+            <p class="text-slate-500 text-sm mb-6 leading-relaxed">২ মিনিট যাবত নিষ্ক্রিয় থাকায় <span id="timerDisplay" class="font-bold text-rose-600 text-lg">১৫</span> সেকেন্ড পর অটো-লগআউট করা হচ্ছে।</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="resetIdleTimer()" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold transition-all active:scale-95">লগইন অবস্থায় রাখুন</button>
+                <button onclick="forceLogout()" class="w-full bg-slate-100 text-slate-600 py-3 rounded-xl font-bold transition-all active:scale-95">লগআউট</button>
+            </div>
+        </div>
+    </div>
+
+    <aside id="sidebar" class="sidebar w-80 flex-shrink-0 flex flex-col p-8 text-slate-400 border-r border-slate-800 no-scrollbar">
+        <div class="mb-10"><h1 class="text-xl font-black text-white italic tracking-tighter leading-tight">MHG Admin</h1><p class="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-1 border-l-2 border-indigo-600 pl-3 leading-none">Management System</p></div>
+        <nav class="flex-1 space-y-4">
+            <button onclick="showCreateView()" class="w-full p-4 rounded-2xl bg-indigo-600 text-white font-bold shadow-xl flex items-center justify-center gap-2"><i class="fas fa-plus-circle"></i> Create Client</button>
+            <div class="pt-6"><p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 ml-2">Tenant Directory</p><div id="clientList" class="space-y-2 max-h-[350px] overflow-y-auto custom-scroll pr-2"></div></div>
+        </nav>
+        <button id="logoutBtn" class="mt-8 flex items-center gap-3 text-rose-500 font-bold p-4 hover:bg-rose-500/10 rounded-xl transition-all w-full text-left font-['Plus_Jakarta_Sans'] uppercase tracking-widest text-[10px]"><i class="fa-solid fa-power-off"></i> Logout</button>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto no-scrollbar relative flex flex-col" id="mainScroll">
+        <header id="mainHeader" class="flex items-center justify-between p-5 bg-white sticky top-0"><h2 class="font-black text-slate-900 text-sm tracking-tight uppercase">Mozammal Hoque Market</h2><button id="menuToggle" class="lg:hidden w-11 h-11 bg-[#0f172a] text-white rounded-xl shadow-lg flex items-center justify-center"><i id="menuIcon" class="fa-solid fa-bars-staggered"></i></button></header>
+
+        <div class="p-6 lg:p-14 space-y-10 max-w-[1400px] mx-auto w-full">
+            
+            <!-- CREATE VIEW -->
+            <div id="createView" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="bg-indigo-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
+                    <h2 class="text-3xl font-black mb-8 italic tracking-tight uppercase">New Client Registration</h2>
+                    <div class="flex gap-2 mb-10"><div id="pb1" class="h-1.5 flex-1 bg-white rounded-full"></div><div id="pb2" class="h-1.5 flex-1 bg-white/20 rounded-full"></div><div id="pb3" class="h-1.5 flex-1 bg-white/20 rounded-full"></div></div>
+
+                    <div id="step1" class="space-y-4">
+                        <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Section 01: Personal Information</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="text" id="t_name_bn" placeholder="নাম (বাংলায়)" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_name_en" placeholder="Name (English)" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_father" placeholder="পিতার নাম" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_mother" placeholder="মাতার নাম" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="date" id="t_dob" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_nid" placeholder="NID Number" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_img" placeholder="Profile Image URL" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none md:col-span-2"><textarea id="t_address" placeholder="ঠিকানা" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none md:col-span-2 h-20"></textarea>
+                        </div>
+                        <button onclick="valStep1()" class="w-full bg-indigo-500 py-4 rounded-2xl font-bold text-lg shadow-xl mt-4">Next Step <i class="fas fa-arrow-right ml-2"></i></button>
+                    </div>
+
+                    <div id="step2" class="space-y-4 hidden">
+                        <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Section 02: Business Information</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="text" id="t_biz_name" placeholder="ব্যবসা প্রতিষ্ঠানের নাম" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_biz_type" placeholder="ব্যবসার ধরণ" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_unit_codes" placeholder="Unit Codes (comma separated)" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none"><input type="text" id="t_tenant_code" placeholder="Tenant Code" class="p-4 bg-white/10 rounded-2xl border border-white/5 outline-none font-bold text-indigo-300">
+                        </div>
+                        <div class="flex gap-4 pt-4"><button onclick="showStep(1)" class="w-1/3 bg-white/5 py-4 rounded-2xl font-bold">Back</button><button onclick="valStep2()" class="w-2/3 bg-indigo-500 py-4 rounded-2xl font-bold">Account Setup <i class="fas fa-arrow-right ml-2"></i></button></div>
+                    </div>
+
+                    <div id="step3" class="space-y-4 hidden">
+                        <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Section 03: Account Settings</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="email" id="t_email" placeholder="Tenant Real Email" class="p-4 bg-white/10 rounded-2xl outline-none border border-white/5"><input type="text" id="t_mobile" placeholder="Mobile Number" class="p-4 bg-white/10 rounded-2xl outline-none border border-white/5"><input type="text" id="t_userId" placeholder="User ID" class="p-4 bg-white/10 rounded-2xl outline-none border border-white/5"><input type="password" id="t_pass" placeholder="Password (Min 6)" class="p-4 bg-white/10 rounded-2xl outline-none border border-white/5">
+                        </div>
+                        <div class="flex gap-4 pt-4"><button onclick="showStep(2)" class="w-1/3 bg-white/5 py-4 rounded-2xl font-bold">Back</button><button onclick="createClient()" class="w-2/3 bg-white text-indigo-900 py-4 rounded-2xl font-black text-xl shadow-2xl tracking-widest uppercase">ADD PROFILE</button></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EDITOR VIEW -->
+            <div id="editorView" class="hidden space-y-10 animate-in fade-in">
+                <div class="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div class="flex items-center gap-6">
+                        <img id="ed_img" src="" class="w-20 h-20 rounded-3xl object-cover bg-slate-100 shadow-lg border-2 border-indigo-500/20">
+                        <div><h2 id="ed_name" class="text-3xl font-black text-slate-800 tracking-tight italic leading-none">...</h2><p id="ed_id_display" class="text-sm font-bold text-indigo-500 uppercase tracking-widest mt-2"></p></div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="openProfileModal()" class="bg-indigo-50 text-indigo-600 px-6 py-2.5 rounded-xl font-bold text-xs uppercase hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Edit Profile</button>
+                        <button onclick="deleteFullProfile()" class="text-rose-500 bg-rose-50 px-6 py-2.5 rounded-xl font-bold text-xs uppercase hover:bg-rose-500 hover:text-white transition-all shadow-sm">Delete Account</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    <!-- Specific News -->
+                    <div class="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl space-y-4">
+                        <h3 class="font-bold uppercase text-[10px] tracking-[0.2em] opacity-80 italic">News Bar Content</h3>
+                        <textarea id="newsInput" class="w-full p-4 bg-white/10 border border-white/10 rounded-2xl outline-none h-20 text-sm font-['Hind_Siliguri']" placeholder="নিউজ লিখুন..."></textarea>
+                        <button onclick="updateNews()" class="bg-white text-indigo-600 px-8 py-2 rounded-xl font-bold text-xs">Update News</button>
+                    </div>
+
+                    <!-- Payment Ledger -->
+                    <div class="bg-indigo-50 p-8 rounded-[2.5rem] border border-indigo-100 space-y-5 h-full flex flex-col justify-between">
+                        <h3 class="font-bold text-indigo-900 uppercase text-xs tracking-widest">Rent Entry / Edit</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            <select id="rentMonth" class="p-3 border rounded-xl text-sm outline-none"><option>January</option><option>February</option><option>March</option><option>April</option><option>May</option><option>June</option><option>July</option><option>August</option><option>September</option><option>October</option><option>November</option><option>December</option></select>
+                            <select id="rentYear" class="p-3 border rounded-xl text-sm outline-none"></select>
+                            <input type="number" id="rentAmount" placeholder="Amount (৳)" class="p-3 border rounded-xl text-sm outline-none"><select id="rentMethod" class="p-3 border rounded-xl text-sm"><option>Cash</option><option>Cash (Other)</option><option>Bank</option><option>MFS</option></select><input type="date" id="rentDate" class="p-3 border rounded-xl text-sm outline-none"><input type="text" id="rentRemarks" placeholder="Remarks" class="p-3 border rounded-xl text-sm outline-none">
+                            <button id="paymentBtn" onclick="saveRent()" class="col-span-2 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg">Save Transaction</button>
+                            <button id="cancelRentBtn" onclick="cancelRentEdit()" class="hidden col-span-2 bg-slate-200 text-slate-600 py-2 rounded-xl font-bold text-[10px] uppercase">Cancel Edit</button>
+                        </div>
+                    </div>
+
+                    <!-- Notice Manager -->
+                    <div class="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-100 flex flex-col h-full">
+                        <h3 class="font-bold text-amber-800 uppercase text-xs tracking-widest mb-4">Notices Manager</h3>
+                        <div class="space-y-2 mb-6">
+                            <input type="text" id="notTitle" class="w-full p-3 border rounded-xl text-sm font-bold outline-none" placeholder="Notice Title"><textarea id="notCont" class="w-full p-3 border rounded-xl h-20 text-sm outline-none" placeholder="Content..."></textarea><input type="date" id="notDate" class="w-full p-3 border rounded-xl text-sm outline-none"><button id="notBtn" onclick="saveNotice()" class="w-full bg-amber-600 text-white py-3 rounded-xl font-bold shadow-lg">Post Notice</button><button id="cancelNotBtn" onclick="cancelNoticeEdit()" class="hidden w-full bg-slate-200 text-slate-500 py-2 rounded-xl font-bold text-[10px] mt-1">Cancel Edit</button>
+                        </div>
+                        <div id="noticeDisplay" class="space-y-3 overflow-y-auto max-h-[250px] flex-1 custom-scroll pr-2"></div>
+                    </div>
+
+                    <!-- Documents Manager -->
+                    <div class="bg-emerald-50 p-8 rounded-[2.5rem] border border-emerald-100 flex flex-col h-full">
+                        <h3 class="font-bold text-emerald-800 uppercase text-xs tracking-widest mb-4">Documents (URLs/Files)</h3>
+                        <div class="space-y-2 mb-6">
+                            <input type="text" id="docTitle" class="w-full p-3 border rounded-xl text-sm font-bold outline-none" placeholder="Doc Title"><textarea id="docCont" class="w-full p-3 border rounded-xl h-20 text-sm outline-none" placeholder="Paste File URL here..."></textarea><button id="docBtn" onclick="saveDoc()" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg">Add Document</button><button id="cancelDocBtn" onclick="cancelDocEdit()" class="hidden w-full bg-slate-200 text-slate-500 py-2 rounded-xl font-bold text-[10px] mt-1">Cancel Edit</button>
+                        </div>
+                        <div id="docDisplay" class="space-y-3 overflow-y-auto max-h-[250px] flex-1 custom-scroll pr-2"></div>
+                    </div>
+                </div>
+
+                <!-- Ledger History with SEARCH & EXPORT -->
+                <div class="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden mt-10">
+                    <div class="p-8 border-b bg-slate-50/30 flex flex-col xl:flex-row justify-between items-center gap-6">
+                        <h3 class="font-bold text-slate-500 text-xs uppercase tracking-widest">Rental Transaction History</h3>
+                        <div class="flex flex-wrap gap-3 w-full xl:w-auto">
+                            <input type="text" id="adminSearch" onkeyup="searchRentTable()" placeholder="Search (Month/Year/Method)..." class="flex-1 lg:w-64 p-3 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-100">
+                            <button onclick="exportToExcel()" class="bg-emerald-600 text-white px-5 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-emerald-900/10 transition-all">Excel</button>
+                            <button onclick="exportToPDF()" class="bg-rose-600 text-white px-5 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-rose-900/10 transition-all">PDF Report</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse"><thead class="bg-slate-50/50 text-slate-400 font-bold text-[10px] uppercase tracking-widest border-b"><tr><th class="p-7">Date</th><th class="p-7">Period</th><th class="p-7">Method</th><th class="p-7 text-indigo-600 font-black">Amount</th><th class="p-7 text-right">Actions</th></tr></thead><tbody id="rentTable" class="divide-y text-sm italic"></tbody></table>
+                    </div>
+                    <div id="rentPagination" class="p-6 flex justify-center gap-2 border-t bg-slate-50/20"></div>
+                </div>
+            </div>
+
+            <div id="placeholder" class="h-full min-h-[600px] flex flex-col items-center justify-center bg-white rounded-[4rem] border-2 border-dashed border-slate-100 text-slate-300 italic"><p>Please select a client from directory</p></div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { auth, db } from '/js/firebase-config.js';
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { collection, onSnapshot, doc, setDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        let selectedId = "", selectedName = "";
+        let fullRentData = [], filteredRentData = [];
+        let rentPage = 1; const rentRowsPerPage = 12;
+        let editingRentObj = null, editingNoticeObj = null, editingDocObj = null;
+        let clientFullData = {};
+
+        const nav = document.getElementById('mainHeader');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        const popup = document.getElementById('timeoutPopup');
+        const tDisplay = document.getElementById('timerDisplay');
+        const modal = document.getElementById('profileModal');
+
+        const enToBn = n => n.toString().replace(/\d/g, x => ({'0':'০','1':'১','2':'২','3':'৩','4':'৪','5':'৫','6':'৬','7':'৭','8':'৮','9':'৯'}[x]));
+
+        // FIXED: Background Timeout with 15s Countdown
+        let adminLimit = 2 * 60 * 1000, logoutTime;
+        function resetIdleTimer() { popup.style.display = 'none'; logoutTime = Date.now() + adminLimit; }
+        setInterval(() => {
+            let now = Date.now();
+            if(now > logoutTime) forceLogout();
+            else if(now > (logoutTime - 15000)) {
+                popup.style.display = 'flex';
+                tDisplay.innerText = enToBn(Math.ceil((logoutTime - now)/1000));
+            }
+        }, 1000);
+        async function forceLogout() { sessionStorage.removeItem('adminActive'); await signOut(auth); window.location.replace("login.html"); }
+        window.resetIdleTimer = resetIdleTimer; window.forceLogout = forceLogout;
+        window.onmousemove = resetIdleTimer; window.onkeydown = resetIdleTimer;
+
+        onAuthStateChanged(auth, u => { if (!u) window.location.replace("login.html"); else { document.body.style.display = "flex"; resetIdleTimer(); } });
+
+        // Sidebar Directory List
+        onSnapshot(collection(db, "clients"), snap => {
+            const list = document.getElementById('clientList'); list.innerHTML = "";
+            snap.forEach(d => {
+                const c = d.data();
+                const div = document.createElement('div');
+                div.className = `p-4 rounded-2xl cursor-pointer transition flex justify-between items-center ${selectedId === c.userId ? 'bg-indigo-600 text-white shadow-xl' : 'bg-slate-50 hover:bg-slate-100'}`;
+                div.onclick = () => openEditor(c);
+                div.innerHTML = `<p class="font-bold text-sm leading-none">${c.name}</p><p class="text-[9px] opacity-60 font-mono tracking-tighter">${c.userId}</p>`;
+                list.appendChild(div);
+            });
+        });
+
+        // FIXED: Profile Modal Edit Logic
+        window.openProfileModal = () => {
+            modal.style.display = 'flex';
+            const d = clientFullData;
+            document.getElementById('edit_name_bn').value = d.name_bn || "";
+            document.getElementById('edit_name_en').value = d.name || "";
+            document.getElementById('edit_father').value = d.father || "";
+            document.getElementById('edit_mother').value = d.mother || "";
+            document.getElementById('edit_dob').value = d.dob || "";
+            document.getElementById('edit_nid').value = d.nid || "";
+            document.getElementById('edit_address').value = d.address || "";
+            document.getElementById('edit_tenant_code').value = d.tenant_code || "";
+            document.getElementById('edit_img').value = d.imgUrl || "";
+            document.getElementById('edit_biz_name').value = d.biz_name || "";
+            document.getElementById('edit_biz_type').value = d.biz_type || "";
+            document.getElementById('edit_unit_codes').value = (d.unit_codes || []).join(', ');
+            document.getElementById('edit_email').value = d.tenant_email || "";
+            document.getElementById('edit_mobile').value = d.mobile || "";
+        };
+        window.closeProfileModal = () => modal.style.display = 'none';
+
+        window.updateProfileData = async () => {
+            const up = {
+                name_bn: document.getElementById('edit_name_bn').value, name: document.getElementById('edit_name_en').value,
+                father: document.getElementById('edit_father').value, mother: document.getElementById('edit_mother').value,
+                dob: document.getElementById('edit_dob').value, nid: document.getElementById('edit_nid').value,
+                address: document.getElementById('edit_address').value, tenant_code: document.getElementById('edit_tenant_code').value,
+                imgUrl: document.getElementById('edit_img').value, biz_name: document.getElementById('edit_biz_name').value,
+                biz_type: document.getElementById('edit_biz_type').value, 
+                unit_codes: document.getElementById('edit_unit_codes').value.split(',').map(s=>s.trim()),
+                tenant_email: document.getElementById('edit_email').value, mobile: document.getElementById('edit_mobile').value
+            };
+            await updateDoc(doc(db, "clients", selectedId), up);
+            alert("Profile Data Updated!"); closeProfileModal();
+        };
+
+        // UI Handlers (Steps)
+        window.showCreateView = () => {
+            selectedId = ""; document.getElementById('placeholder').classList.add('hidden');
+            document.getElementById('editorView').classList.add('hidden');
+            document.getElementById('createView').classList.remove('hidden');
+            showStep(1); if(window.innerWidth < 1024) toggleSidebar();
+        };
+        window.showStep = s => {
+            ['step1','step2','step3'].forEach((id, i) => document.getElementById(id).classList.toggle('hidden', i+1 !== s));
+            ['pb1','pb2','pb3'].forEach((id, i) => document.getElementById(id).style.background = (i+1 <= s ? '#fff' : 'rgba(255,255,255,0.2)'));
+        };
+        window.valStep1 = () => { if(['t_name_bn','t_name_en','t_dob','t_img','t_address'].every(i=>document.getElementById(i).value)) showStep(2); else alert("সব তথ্য দিন!"); };
+        window.valStep2 = () => { if(['t_biz_name','t_unit_codes','t_tenant_code'].every(i=>document.getElementById(i).value)) showStep(3); else alert("সব তথ্য দিন!"); };
+
+        // CRUD Operations
+        window.createClient = async () => {
+            const id = document.getElementById('t_userId').value.trim();
+            const pass = document.getElementById('t_pass').value.trim();
+            const info = {
+                name_bn: document.getElementById('t_name_bn').value, name: document.getElementById('t_name_en').value,
+                father: document.getElementById('t_father').value, mother: document.getElementById('t_mother').value,
+                dob: document.getElementById('t_dob').value, nid: document.getElementById('t_nid').value,
+                imgUrl: document.getElementById('t_img').value, address: document.getElementById('t_address').value,
+                biz_name: document.getElementById('t_biz_name').value, biz_type: document.getElementById('t_biz_type').value,
+                unit_codes: document.getElementById('t_unit_codes').value.split(',').map(s=>s.trim()),
+                tenant_code: document.getElementById('t_tenant_code').value,
+                tenant_email: document.getElementById('t_email').value, mobile: document.getElementById('t_mobile').value,
+                userId: id, password: pass, news_text: "মাসের ১ থেকে ৫ তারিখের মধ্যে ভাড়া পরিশোধ করুন।",
+                rentData: [], notices: [], docs: []
+            };
+            await setDoc(doc(db,"clients",id),info); alert("Tenant Created!"); location.reload();
+        };
+
+        // FIXED: Date Sorters (Calendar Based)
+        function openEditor(c) {
+            selectedId = c.userId; selectedName = c.name;
+            document.getElementById('placeholder').classList.add('hidden');
+            document.getElementById('createView').classList.add('hidden');
+            document.getElementById('editorView').classList.remove('hidden');
+            
+            onSnapshot(doc(db, "clients", c.userId), d => {
+                if(!d.exists()) return;
+                clientFullData = d.data();
+                document.getElementById('ed_name').innerText = clientFullData.name;
+                document.getElementById('ed_id_display').innerText = `Profile ID: ${selectedId}`;
+                document.getElementById('ed_img').src = clientFullData.imgUrl || "https://ui-avatars.com/api/?name="+clientFullData.name;
+                
+                // Sorting Rent Data by Calendar Date Object
+                fullRentData = (clientFullData.rentData || []).sort((a,b) => new Date(b.date) - new Date(a.date));
+                filteredRentData = [...fullRentData];
+                renderRentTable();
+
+                // Sort Notices
+                const nDisplay = document.getElementById('noticeDisplay'); nDisplay.innerHTML = "";
+                (clientFullData.notices || []).sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(n => {
+                    const dv = document.createElement('div');
+                    dv.className = "bg-white p-4 rounded-2xl border border-amber-100 shadow-sm text-xs";
+                    dv.innerHTML = `<div class="mb-2"><p class="font-bold text-amber-600">Date: ${n.date}</p><p class="font-bold text-slate-800 text-sm mt-1">${n.title}</p></div><div class="flex gap-2 justify-end mt-4"><button onclick="editNotice('${JSON.stringify(n).replace(/"/g, '&quot;')}')" class="text-indigo-500 font-bold uppercase">Edit</button><button onclick="deleteNotice('${JSON.stringify(n).replace(/"/g, '&quot;')}')" class="text-rose-500 font-bold uppercase">Del</button></div>`;
+                    nDisplay.appendChild(dv);
+                });
+
+                // Docs
+                const dDisplay = document.getElementById('docDisplay'); dDisplay.innerHTML = "";
+                (clientFullData.docs || []).forEach(docObj => {
+                    const dv = document.createElement('div');
+                    dv.className = "bg-white p-4 rounded-2xl border border-emerald-100 shadow-sm text-xs";
+                    dv.innerHTML = `<div class="mb-2"><p class="font-bold text-emerald-800 text-sm">${docObj.title}</p><p class="truncate opacity-60">${docObj.content}</p></div><div class="flex gap-2 justify-end mt-4"><button onclick="editDoc('${JSON.stringify(docObj).replace(/"/g, '&quot;')}')" class="text-indigo-500 font-bold uppercase">Edit</button><button onclick="deleteDocItem('${JSON.stringify(docObj).replace(/"/g, '&quot;')}')" class="text-rose-500 font-bold uppercase">Del</button></div>`;
+                    dDisplay.appendChild(dv);
+                });
+            });
+        }
+
+        // Search & Pagination Logic (Admin)
+        window.renderRentTable = () => {
+            const body = document.getElementById('rentTable'); body.innerHTML = "";
+            const start = (rentPage - 1) * rentRowsPerPage;
+            filteredRentData.slice(start, start + rentRowsPerPage).forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td class="p-6 text-slate-400 font-mono text-[10px]">${r.date}</td><td class="p-6 font-bold">${r.month} ${r.year}</td><td class="p-6 italic opacity-70">${r.method}</td><td class="p-6 font-black text-indigo-600">${r.amount}৳</td><td class="p-6 text-right flex justify-end gap-3"><button onclick="editRent('${JSON.stringify(r).replace(/"/g, '&quot;')}')" class="text-indigo-500 font-black text-[10px] underline">Edit</button><button onclick="deleteRent('${JSON.stringify(r).replace(/"/g, '&quot;')}')" class="text-rose-500 font-black text-[10px] underline">Del</button></td>`;
+                body.appendChild(tr);
+            });
+            renderRentPagination();
+        };
+
+        window.searchRentTable = () => {
+            const v = document.getElementById('adminSearch').value.toLowerCase();
+            filteredRentData = fullRentData.filter(r => r.month.toLowerCase().includes(v) || r.year.toString().includes(v) || r.method.toLowerCase().includes(v));
+            rentPage = 1; renderRentTable();
+        };
+
+        function renderRentPagination() {
+            const con = document.getElementById('rentPagination'); con.innerHTML = "";
+            const totalPages = Math.ceil(filteredRentData.length / rentRowsPerPage);
+            if(totalPages <= 1) return;
+            for(let i=1; i<=totalPages; i++) {
+                const btn = document.createElement('button'); btn.innerText = i;
+                btn.className = `w-9 h-9 rounded-lg font-bold text-xs ${i === rentPage ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-400 border'}`;
+                btn.onclick = () => { rentPage = i; renderRentTable(); };
+                con.appendChild(btn);
+            }
+        }
+
+        // Export Logic (Filtered Only)
+        window.exportToPDF = () => {
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            const rows = filteredRentData.map(r => [r.date, `${r.month} ${r.year}`, r.method, `${r.amount} TK`, r.remarks || '-']);
+            doc.text(`Market MHG Ledger: ${selectedName}`, 14, 15);
+            doc.autoTable({ startY: 20, head: [['Date', 'Period', 'Method', 'Amount', 'Remarks']], body: rows });
+            doc.save(`Rent_${selectedId}.pdf`);
+        };
+        window.exportToExcel = () => {
+            const ws = XLSX.utils.json_to_sheet(filteredRentData); const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "RentData"); XLSX.writeFile(wb, `Rent_${selectedId}.xlsx`);
+        };
+
+        // Year Populate
+        const yrSel = document.getElementById('rentYear'); const curYear = new Date().getFullYear();
+        for(let i=2020; i<=curYear+10; i++){ let o=document.createElement('option'); o.value=i; o.text=i; if(i===curYear) o.selected=true; yrSel.appendChild(o); }
+
+        // CRUD Helpers (Rent, Notice, Doc)
+        window.saveRent = async () => {
+            const d = { month: document.getElementById('rentMonth').value, year: document.getElementById('rentYear').value, amount: document.getElementById('rentAmount').value, method: document.getElementById('rentMethod').value, date: document.getElementById('rentDate').value, remarks: document.getElementById('rentRemarks').value || "-", timestamp: editingRentObj ? editingRentObj.timestamp : Date.now() };
+            if(!d.amount || !d.date) return alert("Fill Amount & Date");
+            const docRef = doc(db, "clients", selectedId);
+            if(editingRentObj) await updateDoc(docRef, { rentData: arrayRemove(editingRentObj) });
+            await updateDoc(docRef, { rentData: arrayUnion(d) }); cancelRentEdit();
+        };
+        window.editRent = j => { editingRentObj = JSON.parse(j); document.getElementById('rentMonth').value=editingRentObj.month; document.getElementById('rentYear').value=editingRentObj.year; document.getElementById('rentAmount').value=editingRentObj.amount; document.getElementById('rentMethod').value=editingRentObj.method; document.getElementById('rentDate').value=editingRentObj.date; document.getElementById('rentRemarks').value=editingRentObj.remarks; document.getElementById('paymentBtn').innerText="Update Record"; document.getElementById('cancelRentBtn').classList.remove('hidden'); };
+        window.cancelRentEdit = () => { editingRentObj = null; document.getElementById('paymentBtn').innerText="Save Record"; document.getElementById('cancelRentBtn').classList.add('hidden'); ['rentAmount','rentDate','rentRemarks'].forEach(i=>document.getElementById(i).value=""); };
+
+        window.saveNotice = async () => {
+            const d = { id: editingNoticeObj?editingNoticeObj.id:Date.now(), title: document.getElementById('notTitle').value, content: document.getElementById('notCont').value, date: document.getElementById('notDate').value };
+            if(!d.title || !d.content || !d.date) return alert("Fill all fields");
+            const docRef = doc(db, "clients", selectedId);
+            if(editingNoticeObj) await updateDoc(docRef, { notices: arrayRemove(editingNoticeObj) });
+            await updateDoc(docRef, { notices: arrayUnion(d) }); cancelNoticeEdit();
+        };
+        window.editNotice = j => { editingNoticeObj=JSON.parse(j); document.getElementById('notTitle').value=editingNoticeObj.title; document.getElementById('notCont').value=editingNoticeObj.content; document.getElementById('notDate').value=editingNoticeObj.date; document.getElementById('notBtn').innerText="Update Notice"; document.getElementById('cancelNotBtn').classList.remove('hidden'); };
+        window.cancelNoticeEdit = () => { editingNoticeObj=null; document.getElementById('notBtn').innerText="Post Notice"; document.getElementById('cancelNotBtn').classList.add('hidden'); document.getElementById('notTitle').value=""; document.getElementById('notCont').value=""; };
+
+        window.saveDoc = async () => {
+            const d = { id: editingDocObj?editingDocObj.id:Date.now(), title: document.getElementById('docTitle').value, content: document.getElementById('docCont').value };
+            if(!d.title || !d.content) return alert("Fill Title & URL/Text");
+            const docRef = doc(db, "clients", selectedId);
+            if(editingDocObj) await updateDoc(docRef, { docs: arrayRemove(editingDocObj) });
+            await updateDoc(docRef, { docs: arrayUnion(d) }); cancelDocEdit();
+        };
+        window.editDoc = j => { editingDocObj=JSON.parse(j); document.getElementById('docTitle').value=editingDocObj.title; document.getElementById('docCont').value=editingDocObj.content; document.getElementById('docBtn').innerText="Update Doc"; document.getElementById('cancelDocBtn').classList.remove('hidden'); };
+        window.cancelDocEdit = () => { editingDocObj=null; document.getElementById('docBtn').innerText="Add Document"; document.getElementById('cancelDocBtn').classList.add('hidden'); document.getElementById('docTitle').value=""; document.getElementById('docCont').value=""; };
+        window.deleteDocItem = async j => { if(confirm("Delete Doc?")) await updateDoc(doc(db,"clients",selectedId), { docs: arrayRemove(JSON.parse(j)) }); };
+
+        window.deleteRent = async j => { if(confirm("Delete Record?")) await updateDoc(doc(db,"clients",selectedId), { rentData: arrayRemove(JSON.parse(j)) }); };
+        window.deleteNotice = async j => { if(confirm("Delete Notice?")) await updateDoc(doc(db,"clients",selectedId), { notices: arrayRemove(JSON.parse(j)) }); };
+        window.updateNews = async () => { await updateDoc(doc(db,"clients",selectedId), { news_text: document.getElementById('newsInput').value }); alert("News Updated!"); };
+        window.deleteFullProfile = async () => { if(prompt(`Type "${selectedName}" to confirm deletion:`) === selectedName) { await deleteDoc(doc(db, "clients", selectedId)); location.reload(); } };
+
+        window.toggleSidebar = () => { sidebar.classList.toggle('active'); overlay.classList.toggle('active'); document.getElementById('menuIcon').className = sidebar.classList.contains('active') ? "fa-solid fa-xmark" : "fa-solid fa-bars-staggered"; };
+        document.getElementById('menuToggle').onclick = toggleSidebar;
+        overlay.onclick = toggleSidebar;
+        document.getElementById('logoutBtn').onclick = () => forceLogout();
+    </script>
+</body>
+</html>
